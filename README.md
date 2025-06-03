@@ -1,5 +1,5 @@
 # IDX 多容器代理服务部署项目
-文档: [English version](https://github.com/fscarmen2/IDX_NixOS/blob/main/README_EN.md) | 中文版
+Documentation: [English version](https://github.com/fscarmen2/IDX_NixOS/blob/main/README_EN.md) | 中文版
 
 ## 目录
 - [项目概述](#项目概述)
@@ -15,7 +15,11 @@
   - [保存文件](#3-保存文件)
   - [部署到 IDX](#4-部署到-idx)
   - [验证部署](#5-验证部署)
-- [注意事项](#注意事项)
+  - [注意事项](#注意事项)
+- [OpenWrt FRPC 快速部署](#openwrt-frpc-快速部署)
+  - [OpenWRT 部署步骤](#openwrt-部署步骤)
+  - [卸载](#卸载)
+  - [OpenWRT 注意事项](#openwrt-注意事项)
 
 ## 项目概述
 
@@ -24,7 +28,7 @@
 ## 项目特点
 
 1. **多容器环境**：同时部署 Debian、Ubuntu、CentOS 和 Alpine 四种 Linux 容器
-2. **网络代理服务**：集成 Sing-Box 提供 VMess 和 VLESS 协议支持
+2. **网络代理服务**：集成 Sing-Box 提供6种协议支持
 3. **内网穿透**：通过 Cloudflare Argo Tunnel 和 FRP 实现内网服务的外网访问
 4. **服务监控**：集成哪吒监控 (Nezha) 代理，实时监控服务状态
 5. **自动化部署**：利用 IDX 的 Nix 配置实现一键部署和启动
@@ -45,8 +49,7 @@
 
 使用 Sing-Box 提供高性能的网络代理服务：
 
-- **协议支持**：VMess 和 VLESS
-- **传输方式**：WebSocket + TLS
+- **协议支持**：VMess + WebSocket + TLS， VLESS + WebSocket + TLS， VLESS + Reality，AnyTLS，Hysteria2，TUIC
 - **多客户端支持**：自动生成 Clash、V2rayN、NekoBox、Shadowrocket 和 SingBox 配置
 
 ### 3. 网络穿透服务
@@ -91,7 +94,48 @@
    - 使用配置的端口和密码访问各个容器
    - 查看哪吒监控面板确认服务状态
 
-**注意事项**：
+### 注意事项
 - 请确保修改的参数格式正确，保持引号完整
 - 敏感信息（如密码、令牌）建议使用强密码
 - 部署完成后请及时测试所有服务是否正常运行
+
+## OpenWrt FRPC 快速部署
+
+本项目提供了一键部署脚本，可以在 OpenWrt 系统上快速部署和管理 FRP 客户端。
+
+### OpenWRT 部署步骤
+
+1. **下载并执行安装脚本**
+```bash
+bash <(curl -sSL https://raw.githubusercontent.com/fscarmen2/IDX_NIXOS/main/install-frpc.sh)
+```
+
+2. **配置 FRPC**
+   - 脚本会提示您输入 FRPC 配置内容
+   - 输入完成后按 Ctrl+D 保存
+
+3. **服务管理**
+   - 启动服务：`/etc/init.d/idx-frpc start`
+   - 停止服务：`/etc/init.d/idx-frpc stop`
+   - 重启服务：`/etc/init.d/idx-frpc restart`
+
+### 卸载
+
+如需卸载 FRPC 服务，只需执行以下命令：
+```bash
+uninstall-idx-frpc
+```
+
+此命令会：
+- 停止 FRPC 服务
+- 删除所有配置文件
+- 移除服务脚本
+- 清理日志文件
+
+### OpenWRT 注意事项
+
+1. 确保系统已安装 curl 或 wget
+2. 配置文件会保存在 `/etc/frpc/idx-frpc.toml`
+3. 日志文件位置：`/var/log/idx-frpc.log`
+4. 支持配置文件热重载
+5. 进程异常退出会自动重启
