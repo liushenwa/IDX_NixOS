@@ -8,18 +8,18 @@
     UUID = "de04add9-5c68-8bab-950c-08cd5320df18";  # 可以通过 `cat /proc/sys/kernel/random/uuid` 获取
     CDN = "your-cdn-domain.com";
     NODE_NAME = "your-node-name";
-    VMESS_PORT = "";  # 端口范围 1000-65535
-    VLESS_PORT = "";  # 端口范围 1000-65535
-    REALITY_PORT = "";  # 端口范围 1000-65535
-    ANYTLS_PORT = "";  # 端口范围 1000-65535
-    HYSTERIA2_PORT = "";  # 端口范围 1000-65535
-    TUIC_PORT = "";  # 端口范围 1000-65535
+    VMESS_PORT = "";  # 端口范围 1000-65535，留空则不启用
+    VLESS_PORT = "";  # 端口范围 1000-65535，留空则不启用
+    REALITY_PORT = "";  # 端口范围 1000-65535，留空则不启用
+    ANYTLS_PORT = "";  # 端口范围 1000-65535，留空则不启用
+    HYSTERIA2_PORT = "";  # 端口范围 1000-65535，留空则不启用
+    TUIC_PORT = "";  # 端口范围 1000-65535，留空则不启用
     REALITY_PRIVATE = "CClfZsI2vKDN1d3R7LoaDKE639F816jTYKBk3OTCW3A";  # reality 私钥，43个字符
     REALITY_PUBLIC = "lQbxDqzENHyul8jcFw3Qx0IyRGp4_goLWG5RjzCkiX8";  # reality 公钥，43个字符
     LOCAL_IP = "";  # 本地软路由内网地址
 
     # 节点信息的 Nginx 静态文件服务
-    NGINX_PORT = "";  # 端口范围 1000-65535
+    NGINX_PORT = "";  # 端口范围 1000-65535，留空则不启用
 
     # Argo Tunnel TOKEN 或者 json
     ARGO_AUTH = "your-argo-token";
@@ -46,7 +46,7 @@
   };
 
   # 使用哪个 nixpkgs 频道
-  channel = "stable-24.11"; # 或 "unstable"
+  channel = "stable-25.05"; # 或 "unstable"
 
   # 添加常用系统工具包
   packages = [
@@ -118,7 +118,9 @@
       # 工作区(重新)启动时运行
       onStart = {
         # 创建配置文件目录
-        init-01-mkdir = "[ -d conf ] || mkdir conf; [ -d sing-box ] || mkdir sing-box";
+        init-01-mkdir = "
+          [ ! -d conf ] && mkdir conf
+          [[ $VMESS_PORT$VLESS_PORT$REALITY_PORT$HYSTERIA2_PORT$TUIC_PORT =~ [0-9]+ && ! -d sing-box ]] && mkdir sing-box";
 
         # 生成随机 UUID
         init-01-set-uuid = "[[ ! $UUID =~ ^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$ ]] && cat /proc/sys/kernel/random/uuid > conf/uuid.txt";
@@ -167,8 +169,11 @@ EOF
         fi";
 
         # 检查并创建 nginx 配置
-        init-02-nginx = "[[ ! $UUID =~ ^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$ && -s conf/uuid.txt ]] && UUID=$(cat conf/uuid.txt)
-          cat > sing-box/nginx.conf << EOF
+        init-02-nginx = "
+          if [[ $VMESS_PORT$VLESS_PORT$REALITY_PORT$HYSTERIA2_PORT$TUIC_PORT =~ [0-9]+ ]]; then
+            [[ ! $UUID =~ ^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$ && -s conf/uuid.txt ]] && UUID=$(cat conf/uuid.txt)
+            [ -s sing-box/nginx.conf ] && rm -rf sing-box/nginx.conf
+            cat > sing-box/nginx.conf << EOF
 user  nginx;
 worker_processes  auto;
 
@@ -216,24 +221,29 @@ http {
         }
     }
 }
-EOF";
+EOF
+          fi";
 
         # 检查并创建 SSL 证书
-        init-02-ssl-cert = "[ -f sing-box/cert/private.key ] || (mkdir -p sing-box/cert && openssl ecparam -genkey -name prime256v1 -out sing-box/cert/private.key && openssl req -new -x509 -days 36500 -key sing-box/cert/private.key -out sing-box/cert/cert.pem -subj \"/CN=$(awk -F . '{print $(NF-1)\".\"$NF}' <<< \"$ARGO_DOMAIN\")\")";
+        init-02-ssl-cert = "[[ $VMESS_PORT$VLESS_PORT$REALITY_PORT$HYSTERIA2_PORT$TUIC_PORT =~ [0-9]+ && ! -f sing-box/cert/private.key ]] && (mkdir -p sing-box/cert && openssl ecparam -genkey -name prime256v1 -out sing-box/cert/private.key && openssl req -new -x509 -days 36500 -key sing-box/cert/private.key -out sing-box/cert/cert.pem -subj \"/CN=mozilla.org\")";
 
         # 检查并创建 sing-box 配置
         init-02-singbox = "
-          if [[ $REALITY_PORT =~ [0-9]+ ]]; then
-            if [[ -z $REALITY_PUBLIC || -z $REALITY_PRIVATE ]]; then
-              REALITY_KEYPAIR=$(sing-box generate reality-keypair)
-              REALITY_PRIVATE=$(awk '/PrivateKey/{print $NF}' <<< \"$REALITY_KEYPAIR\")
-              REALITY_PUBLIC=$(awk '/PublicKey/{print $NF}' <<< \"$REALITY_KEYPAIR\")
+          [ -s sing-box/config.json ] && rm -rf sing-box/config.json
+          if [[ $VMESS_PORT$VLESS_PORT$REALITY_PORT$HYSTERIA2_PORT$TUIC_PORT =~ [0-9]+ ]]; then
+            if [[ $REALITY_PORT =~ [0-9]+ ]]; then
+              if [[ -z $REALITY_PUBLIC || -z $REALITY_PRIVATE ]]; then
+                REALITY_KEYPAIR=$(sing-box generate reality-keypair)
+                REALITY_PRIVATE=$(awk '/PrivateKey/{print $NF}' <<< \"$REALITY_KEYPAIR\")
+                REALITY_PUBLIC=$(awk '/PublicKey/{print $NF}' <<< \"$REALITY_KEYPAIR\")
+              fi
+              [ -s sing-box/reality_keypair.txt ] && rm -rf sing-box/reality_keypair.txt
+              echo -n \"PrivateKey: $REALITY_PRIVATE\nPublicKey: $REALITY_PUBLIC\" > sing-box/reality_keypair.txt
             fi
-            echo -n \"PrivateKey: $REALITY_PRIVATE\nPublicKey: $REALITY_PUBLIC\" > sing-box/reality_keypair.txt
-          fi
 
-          [[ ! $UUID =~ ^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$ && -s conf/uuid.txt ]] && UUID=$(cat conf/uuid.txt)
-          cat > sing-box/config.json << EOF
+            [[ ! $UUID =~ ^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$ && -s conf/uuid.txt ]] && UUID=$(cat conf/uuid.txt)
+
+            cat > sing-box/config.json << EOF
 {
     \"dns\":{
         \"servers\":[
@@ -257,7 +267,7 @@ EOF";
     },
     \"inbounds\": [
 EOF
-      [[ $VMESS_PORT =~ [0-9]+ ]] && cat >> sing-box/config.json << EOF
+            [[ $VMESS_PORT =~ [0-9]+ ]] && cat >> sing-box/config.json << EOF
         {
             \"type\":\"vmess\",
             \"tag\":\"vmess-in\",
@@ -294,7 +304,7 @@ EOF
             }
         },
 EOF
-      [[ $VLESS_PORT =~ [0-9]+ ]] && cat >> sing-box/config.json << EOF
+            [[ $VLESS_PORT =~ [0-9]+ ]] && cat >> sing-box/config.json << EOF
         {
             \"type\": \"vless\",
             \"tag\": \"vless-in\",
@@ -322,9 +332,9 @@ EOF
                 \"enabled\":true,
                 \"padding\":true
             }
-EOF
-      [[ $REALITY_PORT =~ [0-9]+ ]] && cat >> sing-box/config.json << EOF
         },
+EOF
+            [[ $REALITY_PORT =~ [0-9]+ ]] && cat >> sing-box/config.json << EOF
         {
             \"type\":\"vless\",
             \"tag\":\"reality-in\",
@@ -360,10 +370,10 @@ EOF
                     \"down_mbps\":1000
                 }
             }
+        },
 EOF
 
-    [[ $ANYTLS_PORT =~ [0-9]+ ]] && cat >> sing-box/config.json << EOF
-        },
+            [[ $ANYTLS_PORT =~ [0-9]+ ]] && cat >> sing-box/config.json << EOF
         {
             \"type\":\"anytls\",
             \"tag\":\"anytls-in\",
@@ -380,10 +390,10 @@ EOF
                 \"certificate_path\":\"/etc/sing-box/cert/cert.pem\",
                 \"key_path\":\"/etc/sing-box/cert/private.key\"
             }
+        },
 EOF
 
-    [[ $HYSTERIA2_PORT =~ [0-9]+ ]] && cat >> sing-box/config.json << EOF
-        },
+            [[ $HYSTERIA2_PORT =~ [0-9]+ ]] && cat >> sing-box/config.json << EOF
         {
             \"type\":\"hysteria2\",
             \"tag\":\"hysteria2-in\",
@@ -406,10 +416,9 @@ EOF
                 \"certificate_path\":\"/etc/sing-box/cert/cert.pem\",
                 \"key_path\":\"/etc/sing-box/cert/private.key\"
             }
-EOF
-
-    [[ $TUIC_PORT =~ [0-9]+ ]] && cat >> sing-box/config.json << EOF
         },
+EOF
+            [[ $TUIC_PORT =~ [0-9]+ ]] && cat >> sing-box/config.json << EOF
         {
             \"type\":\"tuic\",
             \"tag\":\"tuic-in\",
@@ -431,10 +440,12 @@ EOF
                 \"certificate_path\":\"/etc/sing-box/cert/cert.pem\",
                 \"key_path\":\"/etc/sing-box/cert/private.key\"
             }
+        },
 EOF
 
-    cat >> sing-box/config.json << EOF
-        }
+            sed -i '$s/,$//g' sing-box/config.json
+
+            cat >> sing-box/config.json << EOF
     ],
     \"outbounds\": [
         {
@@ -445,10 +456,11 @@ EOF
 }
 EOF
 
-          # 创建 node.txt 文件
-          [[ ! $UUID =~ ^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$ && -s conf/uuid.txt ]] && UUID=$(cat conf/uuid.txt)
-          NODE_NAME_1=$(sed \"s/ /%20/g\" <<< \"$NODE_NAME\")
-          [[ $VMESS_PORT$VLESS_PORT$REALITY_PORT$HYSTERIA2_PORT$TUIC_PORT =~ [0-9]+ ]] && cat > sing-box/node.txt << EOF
+            # 创建 node.txt 文件
+            [[ ! $UUID =~ ^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$ && -s conf/uuid.txt ]] && UUID=$(cat conf/uuid.txt)
+            NODE_NAME_1=$(sed \"s/ /%20/g\" <<< \"$NODE_NAME\")
+            [ -s sing-box/node.txt ] && rm -rf sing-box/node.txt
+            [[ $VMESS_PORT$VLESS_PORT$REALITY_PORT$HYSTERIA2_PORT$TUIC_PORT =~ [0-9]+ ]] && cat > sing-box/node.txt << EOF
 浏览器访问节点信息: https://$ARGO_DOMAIN/$UUID/node
 
 *******************************************
@@ -461,22 +473,22 @@ EOF
 
 EOF
 
-          [[ $VMESS_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
+            [[ $VMESS_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
 vmess://\$(echo -n '{\"v\":\"2\",\"ps\":\"'$NODE_NAME' vmess\",\"add\":\"'$CDN'\",\"port\":\"443\",\"id\":\"'$UUID'\",\"aid\":\"0\",\"scy\":\"none\",\"net\":\"ws\",\"type\":\"none\",\"host\":\"'$ARGO_DOMAIN'\",\"path\":\"/'$UUID'-vmess\",\"tls\":\"tls\",\"sni\":\"'$ARGO_DOMAIN'\",\"alpn\":\"\",\"fp\":\"chrome\"}' | base64 -w0)
 
 EOF
 
-          [[ $VLESS_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
+            [[ $VLESS_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
 vless://$UUID@$CDN:443?encryption=none&security=tls&sni=$ARGO_DOMAIN&fp=chrome&type=ws&host=$ARGO_DOMAIN&path=%2F$UUID-vless#$NODE_NAME_1%20vless
 
 EOF
 
-          [[ $REALITY_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
+            [[ $REALITY_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
 vless://$UUID@$LOCAL_IP:$REALITY_PORT?encryption=none&security=reality&sni=addons.mozilla.org&fp=chrome&pbk=$REALITY_PUBLIC&type=tcp&headerType=none#$NODE_NAME_1%20reality
 
 EOF
 
-          [[ $ANYTLS_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
+            [[ $ANYTLS_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
 {
     \"log\":{
         \"level\":\"warn\"
@@ -512,17 +524,17 @@ EOF
 
 EOF
 
-          [[ $HYSTERIA2_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
+            [[ $HYSTERIA2_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
 hysteria2://$UUID@$LOCAL_IP:$HYSTERIA2_PORT/?alpn=h3&insecure=1#$NODE_NAME_1%20hysteria2
 
 EOF
 
-          [[ $TUIC_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
+            [[ $TUIC_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
 tuic://$UUID:$UUID@$LOCAL_IP:$TUIC_PORT?alpn=h3&congestion_control=bbr#$NODE_NAME_1%20tuic
 
 EOF
 
-          cat >> sing-box/node.txt << EOF
+            cat >> sing-box/node.txt << EOF
 *******************************************
 
 ┌────────────────┐
@@ -533,37 +545,37 @@ EOF
 
 EOF
 
-          [[ $VMESS_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
+            [[ $VMESS_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
 vmess://\$(echo -n '{\"add\":\"'$CDN'\",\"aid\":\"0\",\"host\":\"'$ARGO_DOMAIN'\",\"id\":\"'$UUID'\",\"net\":\"ws\",\"path\":\"/'$UUID'-vmess\",\"port\":\"443\",\"ps\":\"'$NODE_NAME' vmess\",\"scy\":\"none\",\"sni\":\"'$ARGO_DOMAIN'\",\"tls\":\"tls\",\"type\":\"\",\"v\":\"2\"}' | base64 -w0)
 
 EOF
 
-          [[ $VLESS_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
+            [[ $VLESS_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
 vless://$UUID@$CDN:443?security=tls&sni=$ARGO_DOMAIN&fp=chrome&type=ws&path=/$UUID-vless&host=$ARGO_DOMAIN&encryption=none#$NODE_NAME%20vless
 
 EOF
 
-          [[ $REALITY_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
+            [[ $REALITY_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
 vless://$UUID@$LOCAL_IP:$REALITY_PORT?security=reality&sni=addons.mozilla.org&fp=chrome&pbk=$REALITY_PUBLIC&type=tcp&encryption=none#$NODE_NAME_1%20reality
 
 EOF
 
-          [[ $ANYTLS_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
+            [[ $ANYTLS_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
 anytls://$UUID@$LOCAL_IP:$ANYTLS_PORT/?insecure=1#$NODE_NAME_1%20anytls
 
 EOF
 
-          [[ $HYSTERIA2_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
+            [[ $HYSTERIA2_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
 hy2://$UUID@$LOCAL_IP:$HYSTERIA2_PORT?insecure=1#$NODE_NAME_1%20hysteria2
 
 EOF
 
-          [[ $TUIC_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
+            [[ $TUIC_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
 tuic://$UUID:$UUID@$LOCAL_IP:$TUIC_PORT?congestion_control=bbr&alpn=h3&udp_relay_mode=native&allow_insecure=1&disable_sni=1#$NODE_NAME_1%20tuic
 
 EOF
 
-          cat >> sing-box/node.txt << EOF
+            cat >> sing-box/node.txt << EOF
 *******************************************
 
 ┌────────────────┐
@@ -573,35 +585,35 @@ EOF
 └────────────────┘
 
 EOF
-          [[ $VMESS_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
+            [[ $VMESS_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
 vmess://\$(echo -n \"none:$UUID@$CDN:443\" | base64 -w0)?remarks=$NODE_NAME_1%20vmess&obfsParam=$ARGO_DOMAIN&path=/$UUID-vmess?ed=2048&obfs=websocket&tls=1&peer=$ARGO_DOMAIN&mux=1&alterId=0
 
 EOF
-          [[ $VLESS_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
+            [[ $VLESS_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
 vless://\$(echo -n \"auto:$UUID@$CDN:443\" | base64 -w0)?remarks=$NODE_NAME_1%20vless&obfsParam=$ARGO_DOMAIN&path=/$UUID-vless?ed=2048&obfs=websocket&tls=1&peer=$ARGO_DOMAIN&allowInsecure=1&mux=1
 
 EOF
 
-          [[ $REALITY_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
+            [[ $REALITY_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
 vless://$(echo -n \"auto:$UUID@$LOCAL_IP:$REALITY_PORT\" | base64 -w0)?remarks=$NODE_NAME_1%20reality&obfs=none&tls=1&peer=addons.mozilla.org&mux=1&pbk=$REALITY_PUBLIC
 
 EOF
 
-          [[ $ANYTLS_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
+            [[ $ANYTLS_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
 anytls://$UUID@$LOCAL_IP:$ANYTLS_PORT?insecure=1&udp=1#$NODE_NAME_1%20anytls
 
 EOF
 
-          [[ $HYSTERIA2_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
+            [[ $HYSTERIA2_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
 hysteria2://$UUID@$LOCAL_IP:$HYSTERIA2_PORT?insecure=1&obfs=none#$NODE_NAME_1%20hysteria2
 
 EOF
 
-          [[ $TUIC_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
+            [[ $TUIC_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
 tuic://$UUID:$UUID@$LOCAL_IP:$TUIC_PORT?congestion_control=bbr&udp_relay_mode=native&alpn=h3&allow_insecure=1#$NODE_NAME_1%20tuic
 
 EOF
-          cat >> sing-box/node.txt << EOF
+            cat >> sing-box/node.txt << EOF
 *******************************************
 
 ┌────────────────┐
@@ -612,7 +624,7 @@ EOF
 
 proxies:
 EOF
-          [[ $VMESS_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
+            [[ $VMESS_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
   - name: \"$NODE_NAME vmess\"
     type: vmess
     server: \"$CDN\"
@@ -641,7 +653,7 @@ EOF
     tfo: false
 
 EOF
-          [[ $VLESS_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
+            [[ $VLESS_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
   - name: \"$NODE_NAME vless\"
     type: vless
     server: \"$CDN\"
@@ -669,7 +681,7 @@ EOF
 
 EOF
 
-          [[ $REALITY_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
+              [[ $REALITY_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
   - name: \"$NODE_NAME reality\"
     type: vless
     server: $LOCAL_IP
@@ -695,7 +707,7 @@ EOF
 
 EOF
 
-          [[ $ANYTLS_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
+            [[ $ANYTLS_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
   - name: \"$NODE_NAME anytls\"
     type: anytls
     server: $LOCAL_IP
@@ -709,7 +721,7 @@ EOF
 
 EOF
 
-          [[ $HYSTERIA2_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
+            [[ $HYSTERIA2_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
   - name: \"$NODE_NAME hysteria2\"
     type: hysteria2
     server: $LOCAL_IP
@@ -721,7 +733,7 @@ EOF
 
 EOF
 
-          [[ $TUIC_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
+            [[ $TUIC_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
   - name: \"$NODE_NAME tuic\"
     type: tuic
     server: $LOCAL_IP
@@ -738,7 +750,7 @@ EOF
     skip-cert-verify: true
 
 EOF
-          cat >> sing-box/node.txt << EOF
+            cat >> sing-box/node.txt << EOF
 *******************************************
 
 ┌────────────────┐
@@ -752,7 +764,7 @@ EOF
         {
 EOF
 
-          [[ $VMESS_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
+            [[ $VMESS_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
             \"tag\": \"$NODE_NAME vmess\",
             \"type\": \"vmess\",
             \"server\": \"$CDN\",
@@ -787,7 +799,7 @@ EOF
         },
 EOF
 
-          [[ $VLESS_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
+            [[ $VLESS_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
         {
             \"type\": \"vless\",
             \"tag\": \"$NODE_NAME vless\",
@@ -814,7 +826,7 @@ EOF
         },
 EOF
 
-          [[ $REALITY_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
+            [[ $REALITY_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
         {
             \"type\": \"vless\",
             \"tag\": \"$NODE_NAME xtls-reality\",
@@ -851,7 +863,7 @@ EOF
         },
 EOF
 
-          [[ $ANYTLS_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
+            [[ $ANYTLS_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
         {
             \"type\": \"anytls\",
             \"tag\": \"$NODE_NAME anytls\",
@@ -869,7 +881,7 @@ EOF
         },
 EOF
 
-          [[ $HYSTERIA2_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
+            [[ $HYSTERIA2_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
         {
             \"type\": \"hysteria2\",
             \"tag\": \"$NODE_NAME hysteria2\",
@@ -889,7 +901,7 @@ EOF
         },
 EOF
 
-          [[ $TUIC_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
+            [[ $TUIC_PORT =~ [0-9]+ ]] && cat >> sing-box/node.txt << EOF
         {
             \"type\": \"tuic\",
             \"tag\": \"$NODE_NAME tuic\",
@@ -911,13 +923,14 @@ EOF
             }
         },
 EOF
-          sed -i '$s/,$//g' sing-box/node.txt
-          cat >> sing-box/node.txt << EOF
+            sed -i '$s/,$//g' sing-box/node.txt
+            cat >> sing-box/node.txt << EOF
     ]
 }
 EOF
 
-          [[ -n $FRP_SERVER_ADDR && -n $FRP_SERVER_PORT ]] && cat > sing-box/local_frpc.toml << EOF
+            [ -s sing-box/local_frpc.toml ] && rm -rf sing-box/local_frpc.toml
+            [[ -n $FRP_SERVER_ADDR && -n $FRP_SERVER_PORT ]] && cat > sing-box/local_frpc.toml << EOF
 serverAddr = \"$FRP_SERVER_ADDR\"
 serverPort = $FRP_SERVER_PORT
 loginFailExit = false
@@ -936,7 +949,7 @@ transport.poolCount = 5
 
 EOF
 
-          [[ $REALITY_PORT =~ [0-9]+ ]] && cat >> sing-box/local_frpc.toml << EOF
+            [[ $REALITY_PORT =~ [0-9]+ ]] && cat >> sing-box/local_frpc.toml << EOF
 [[visitors]]
 name = \"$NODE_NAME reality_visitor\"
 type = \"xtcp\"
@@ -948,7 +961,7 @@ keepTunnelOpen = true
 
 EOF
 
-          [[ $ANYTLS_PORT =~ [0-9]+ ]] && cat >> sing-box/local_frpc.toml << EOF
+            [[ $ANYTLS_PORT =~ [0-9]+ ]] && cat >> sing-box/local_frpc.toml << EOF
 [[visitors]]
 name = \"$NODE_NAME anytls_visitor\"
 type = \"xtcp\"
@@ -960,7 +973,7 @@ keepTunnelOpen = true
 
 EOF
 
-          [[ $HYSTERIA2_PORT =~ [0-9]+ ]] && cat >> sing-box/local_frpc.toml << EOF
+            [[ $HYSTERIA2_PORT =~ [0-9]+ ]] && cat >> sing-box/local_frpc.toml << EOF
 [[visitors]]
 name = \"$NODE_NAME hysteria_visitor\"
 type = \"sudp\"
@@ -971,7 +984,7 @@ bindPort = $HYSTERIA2_PORT
 
 EOF
 
-          [[ $TUIC_PORT =~ [0-9]+ ]] && cat >> sing-box/local_frpc.toml << EOF
+            [[ $TUIC_PORT =~ [0-9]+ ]] && cat >> sing-box/local_frpc.toml << EOF
 [[visitors]]
 name = \"$NODE_NAME tuic_visitor\"
 type = \"sudp\"
@@ -981,11 +994,7 @@ bindAddr = \"0.0.0.0\"
 bindPort = $TUIC_PORT
 
 EOF
-###          rm -rf sing-box/{nginx.conf,config.json,node.txt,reality_keypair.txt,local_frpc.toml}
-###          for i in {nginx.conf,config.json,node.txt,reality_keypair.txt,local_frpc.toml}; do
-###            mv $i sing-box/
-###          done
-          ";
+          fi";
 
         # 检查并创建 docker compose 配置文件
         init-02-compose = "
@@ -1096,19 +1105,7 @@ EOF
       \"
 
 EOF
-          grep -q '.' <<< $ARGO_ARGS && cat >> docker-compose.yml << EOF
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    container_name: cloudflared
-    command: $ARGO_ARGS
-    networks:
-      - idx
-    volumes:
-      - ./conf/tunnel.yml:/etc/cloudflared/tunnel.yml:ro
-      - ./conf/tunnel.json:/etc/cloudflared/tunnel.json:ro
-    restart: unless-stopped
 
-EOF
           [[ -n $FRP_SERVER_ADDR && $FRP_SERVER_PORT =~ [0-9]+ ]] && cat >> docker-compose.yml << 'EOF'
   frpc:
     image: snowdreamtech/frpc
@@ -1121,7 +1118,23 @@ EOF
     restart: unless-stopped
 
 EOF
-          [[ $VMESS_PORT$VLESS_PORT$REALITY_PORT$HYSTERIA2_PORT$TUIC_PORT =~ [0-9]+ ]] && cat >> docker-compose.yml << 'EOF'
+
+          if [[ $VMESS_PORT$VLESS_PORT$REALITY_PORT$HYSTERIA2_PORT$TUIC_PORT =~ [0-9]+ ]]; then
+            grep -q '.' <<< $ARGO_ARGS && cat >> docker-compose.yml << EOF
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    command: $ARGO_ARGS
+    networks:
+      - idx
+    volumes:
+      - ./conf/tunnel.yml:/etc/cloudflared/tunnel.yml:ro
+      - ./conf/tunnel.json:/etc/cloudflared/tunnel.json:ro
+    restart: unless-stopped
+
+EOF
+
+            cat >> docker-compose.yml << 'EOF'
   sing-box:
     image: fscarmen/sing-box:pre
     container_name: sing-box
@@ -1133,7 +1146,7 @@ EOF
     restart: unless-stopped
 
 EOF
-          [[ $NGINX_PORT =~ [0-9]+ ]] && cat >> docker-compose.yml << 'EOF'
+            [[ $NGINX_PORT =~ [0-9]+ ]] && cat >> docker-compose.yml << 'EOF'
   nginx:
     image: nginx:alpine
     container_name: nginx
@@ -1143,12 +1156,11 @@ EOF
       - ./sing-box/node.txt:/data/node.txt:ro
       - ./sing-box/nginx.conf:/etc/nginx/nginx.conf:ro
     restart: unless-stopped
-    depends_on:
-      - sing-box
 
 EOF
+          fi
 
-  grep -q '.' <<< $NEZHA_SERVER && cat >> docker-compose.yml << EOF
+          grep -q '.' <<< $NEZHA_SERVER && cat >> docker-compose.yml << EOF
   nezha-agent:
     image: fscarmen/nezha-agent:latest
     container_name: nezha-agent
@@ -1212,7 +1224,7 @@ transport.poolCount = 5
 EOF
           [[ $DEBIAN_REMOTE_PORT =~ [0-9]+ ]] && cat >> frpc.toml << EOF
 [[proxies]]
-name = \"debian_ssh\"
+name = \"$WORKSPACE_SLUG-debian_ssh\"
 type = \"tcp\"
 localIP = \"debian\"
 localPort = 22
@@ -1221,7 +1233,7 @@ remotePort = $DEBIAN_REMOTE_PORT
 EOF
           [[ $UBUNTU_REMOTE_PORT =~ [0-9]+ ]] && cat >> frpc.toml << EOF
 [[proxies]]
-name = \"ubuntu_ssh\"
+name = \"$WORKSPACE_SLUG-ubuntu_ssh\"
 type = \"tcp\"
 localIP = \"ubuntu\"
 localPort = 22
@@ -1230,7 +1242,7 @@ remotePort = $UBUNTU_REMOTE_PORT
 EOF
           [[ $CENTOS_REMOTE_PORT =~ [0-9]+ ]] && cat >> frpc.toml << EOF
 [[proxies]]
-name = \"centos9_ssh\"
+name = \"$WORKSPACE_SLUG-centos9_ssh\"
 type = \"tcp\"
 localIP = \"centos9\"
 localPort = 22
@@ -1239,7 +1251,7 @@ remotePort = $CENTOS_REMOTE_PORT
 EOF
           [[ $ALPINE_REMOTE_PORT =~ [0-9]+ ]] && cat >> frpc.toml << EOF
 [[proxies]]
-name = \"alpine_ssh\"
+name = \"$WORKSPACE_SLUG-alpine_ssh\"
 type = \"tcp\"
 localIP = \"alpine\"
 localPort = 22

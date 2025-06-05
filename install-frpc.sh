@@ -36,15 +36,38 @@ if ! command -v curl >/dev/null 2>&1; then
     fi
 fi
 
+# 检测系统架构
+ARCH=$(uname -m)
+case "$ARCH" in
+    x86_64|amd64)
+        ARCH_TYPE="amd64"
+        ;;
+    aarch64|arm64)
+        ARCH_TYPE="arm64"
+        ;;
+    armv7l|armv7)
+        ARCH_TYPE="arm"
+        ;;
+    mips)
+        ARCH_TYPE="mips"
+        ;;
+    mips64)
+        ARCH_TYPE="mips64"
+        ;;
+    *)
+        error "不支持的架构: $ARCH / Unsupported architecture: $ARCH"
+        ;;
+esac
+
 # 下载最新版本 frpc
 info "下载 frpc / Downloading frpc..."
 if [ "$DOWNLOAD_TOOL" = "curl" ]; then
     LATEST_VERSION=$(curl -s https://api.github.com/repos/fatedier/frp/releases/latest | grep -o '"tag_name": ".*"' | cut -d'"' -f4)
-    DOWNLOAD_URL="https://github.com/fatedier/frp/releases/download/${LATEST_VERSION}/frp_${LATEST_VERSION#v}_linux_arm64.tar.gz"
+    DOWNLOAD_URL="https://github.com/fatedier/frp/releases/download/${LATEST_VERSION}/frp_${LATEST_VERSION#v}_linux_${ARCH_TYPE}.tar.gz"
     curl -L "${GH_PROXY}${DOWNLOAD_URL}" -o /tmp/frp.tar.gz
 else
     LATEST_VERSION=$(wget -qO- https://api.github.com/repos/fatedier/frp/releases/latest | grep -o '"tag_name": ".*"' | cut -d'"' -f4)
-    DOWNLOAD_URL="https://github.com/fatedier/frp/releases/download/${LATEST_VERSION}/frp_${LATEST_VERSION#v}_linux_arm64.tar.gz"
+    DOWNLOAD_URL="https://github.com/fatedier/frp/releases/download/${LATEST_VERSION}/frp_${LATEST_VERSION#v}_linux_${ARCH_TYPE}.tar.gz"
     wget -O /tmp/frp.tar.gz "${GH_PROXY}${DOWNLOAD_URL}"
 fi
 
