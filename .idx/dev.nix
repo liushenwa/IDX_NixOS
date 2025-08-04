@@ -1184,6 +1184,9 @@ EOF
 networks:
   idx:
     driver: bridge
+EOF
+
+          [[ $DEBIAN_REMOTE_PORT =~ [0-9]+ ]] || [[ $UBUNTU_REMOTE_PORT =~ [0-9]+ ]] || [[ $CENTOS_REMOTE_PORT =~ [0-9]+ ]] || [[ $ALPINE_REMOTE_PORT =~ [0-9]+ ]] && cat >> docker-compose.yml << 'EOF'
 
 volumes:
 EOF
