@@ -4,12 +4,12 @@
   # 系统环境变量
   env = {
     # Sing-box 配置
-    ARGO_DOMAIN = "your-domain.example.com";
-    UUID = "de04add9-5c68-8bab-950c-08cd5320df18";  # 可以通过 `cat /proc/sys/kernel/random/uuid` 获取
-    CDN = "your-cdn-domain.com";
-    NODE_NAME = "your-node-name";
-    VMESS_PORT = "";  # 端口范围 1000-65535，留空则不启用
-    VLESS_PORT = "";  # 端口范围 1000-65535，留空则不启用
+    ARGO_DOMAIN = "liushenidx_nixos.liushen521.dpdns.org";
+    UUID = "f1c8a28d-583b-40c9-8005-e2d1ceb5c60f";  # 可以通过 `cat /proc/sys/kernel/random/uuid` 获取
+    CDN = "cf.090227.xyz";
+    NODE_NAME = "liushen";
+    VMESS_PORT = "60000";  # 端口范围 1000-65535，留空则不启用
+    VLESS_PORT = "60001";  # 端口范围 1000-65535，留空则不启用
     REALITY_PORT = "";  # 端口范围 1000-65535，留空则不启用
     ANYTLS_PORT = "";  # 端口范围 1000-65535，留空则不启用
     HYSTERIA2_PORT = "";  # 端口范围 1000-65535，留空则不启用
@@ -19,10 +19,10 @@
     LOCAL_IP = "";  # 本地软路由内网地址
 
     # 节点信息的 Nginx 静态文件服务
-    NGINX_PORT = "";  # 端口范围 1000-65535，留空则不启用
+    NGINX_PORT = "60010";  # 端口范围 1000-65535，留空则不启用
 
     # Argo Tunnel TOKEN 或者 json
-    ARGO_AUTH = "your-argo-token";
+    ARGO_AUTH = "eyJhIjoiNmI4N2I0MmY4YzJhOTIyNjg1YTA3Njk4ZGU4MDFkNDQiLCJ0IjoiMGEwZDM3MTQtZTEzZS00MTdiLThjMTUtYjEyY2MxMjZkNzkzIiwicyI6Ik5qWTJORGc0T1RBdE56UTRaUzAwTVRsaExXSTFOV1F0TjJFeU1UTmpaRE13TUdJdyJ9";
 
     # Nezha 监控配置
     NEZHA_SERVER = "monitor.example.com";
@@ -31,18 +31,18 @@
     NEZHA_TLS = "--tls";  # 不要可以清空值
 
     # SSH 配置
-    SSH_PASSWORD = "your-secure-password";
+    SSH_PASSWORD = "liushenwawa";
 
     # FRP 配置
-    FRP_SERVER_ADDR = "frp.example.com";
+    FRP_SERVER_ADDR = "ulises-unmigrating-excessively.ngrok-free.dev";
     FRP_SERVER_PORT = "7000";
-    FRP_AUTH_TOKEN = "your-frp-token";
+    FRP_AUTH_TOKEN = "34XwVxmU1eNo9GqaANVRaB5lEE3_SgNUN41qYT8LN1MHPA8y";
 
     # 远程端口配置
-    DEBIAN_REMOTE_PORT = "6001";
-    UBUNTU_REMOTE_PORT = "6002";
-    CENTOS_REMOTE_PORT = "6003";
-    ALPINE_REMOTE_PORT = "6004";
+    DEBIAN_REMOTE_PORT = "60011";
+    UBUNTU_REMOTE_PORT = "60012";
+    CENTOS_REMOTE_PORT = "60013";
+    ALPINE_REMOTE_PORT = "60014";
   };
 
   # 使用哪个 nixpkgs 频道
